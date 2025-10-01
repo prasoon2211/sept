@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useCallback } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "@apollo/client/react";
 import { GET_PROJECT } from "@/lib/graphql/queries";
 import { CREATE_CELL, UPDATE_CELL, DELETE_CELL, EXECUTE_CELL } from "@/lib/graphql/mutations";
+import { NotebookCell } from "@/components/NotebookCell";
 
 interface Cell {
   id: string;
@@ -27,16 +28,18 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
   const [executeCell] = useMutation(EXECUTE_CELL);
 
   const [cells, setCells] = useState<Cell[]>([]);
+  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
 
-  // Load cells from GraphQL data
+  // Load cells from GraphQL data only on initial load
   useEffect(() => {
-    if (data?.project?.cells) {
+    if (data?.project?.cells && !hasLoadedInitialData) {
       setCells(data.project.cells.map((cell: any) => ({
         ...cell,
         isRunning: false,
       })));
+      setHasLoadedInitialData(true);
     }
-  }, [data]);
+  }, [data, hasLoadedInitialData]);
 
   const handleAddCell = async () => {
     try {
@@ -53,16 +56,21 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
       });
 
       if (result.data?.createCell) {
-        await refetch();
+        // Add the new cell to local state instead of refetching
+        setCells((prevCells) => [...prevCells, {
+          ...result.data.createCell,
+          isRunning: false,
+          outputs: null,
+        }]);
       }
     } catch (err) {
       console.error("Error creating cell:", err);
     }
   };
 
-  const handleUpdateCellCode = async (id: string, code: string) => {
+  const handleUpdateCellCode = useCallback(async (id: string, code: string) => {
     // Update locally immediately for responsiveness
-    setCells(cells.map((cell) => (cell.id === id ? { ...cell, code } : cell)));
+    setCells((prevCells) => prevCells.map((cell) => (cell.id === id ? { ...cell, code } : cell)));
 
     // Debounce the API call (you might want to add proper debouncing)
     try {
@@ -75,22 +83,23 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
     } catch (err) {
       console.error("Error updating cell:", err);
     }
-  };
+  }, [updateCell]);
 
-  const handleDeleteCell = async (id: string) => {
+  const handleDeleteCell = useCallback(async (id: string) => {
     try {
       await deleteCell({
         variables: { id },
       });
-      await refetch();
+      // Remove from local state instead of refetching
+      setCells((prevCells) => prevCells.filter((c) => c.id !== id));
     } catch (err) {
       console.error("Error deleting cell:", err);
     }
-  };
+  }, [deleteCell]);
 
-  const handleRunCell = async (id: string) => {
+  const handleRunCell = useCallback(async (id: string) => {
     // Set running state
-    setCells(cells.map((c) => (c.id === id ? { ...c, isRunning: true, outputs: null } : c)));
+    setCells((prevCells) => prevCells.map((c) => (c.id === id ? { ...c, isRunning: true, outputs: null } : c)));
 
     try {
       const result = await executeCell({
@@ -99,8 +108,8 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
 
       if (result.data?.executeCell) {
         // Update cell with outputs
-        setCells(
-          cells.map((c) =>
+        setCells((prevCells) =>
+          prevCells.map((c) =>
             c.id === id
               ? { ...c, outputs: result.data.executeCell.outputs, isRunning: false }
               : c
@@ -109,13 +118,13 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
       }
     } catch (err) {
       console.error("Error executing cell:", err);
-      setCells(
-        cells.map((c) =>
+      setCells((prevCells) =>
+        prevCells.map((c) =>
           c.id === id ? { ...c, outputs: [{ type: "error", data: String(err) }], isRunning: false } : c
         )
       );
     }
-  };
+  }, [executeCell]);
 
   if (loading) {
     return (
@@ -162,52 +171,14 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
             </div>
           ) : (
             cells.map((cell, index) => (
-              <div key={cell.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                {/* Cell Header */}
-                <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
-                  <span className="text-sm font-medium text-gray-700">
-                    Cell {index + 1} - {cell.type}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleRunCell(cell.id)}
-                      disabled={cell.isRunning}
-                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {cell.isRunning ? "Running..." : "Run"}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCell(cell.id)}
-                      className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                {/* Code Editor */}
-                <div className="p-4">
-                  <textarea
-                    value={cell.code || ""}
-                    onChange={(e) => handleUpdateCellCode(cell.id, e.target.value)}
-                    className="w-full h-32 font-mono text-sm border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter your code here..."
-                  />
-                </div>
-
-                {/* Output */}
-                {cell.outputs && cell.outputs.length > 0 && (
-                  <div className="px-4 pb-4">
-                    <div className="bg-gray-900 text-gray-100 font-mono text-sm p-4 rounded">
-                      <pre className="whitespace-pre-wrap">
-                        {cell.outputs.map((output: any, i: number) => (
-                          <div key={i}>{output.data}</div>
-                        ))}
-                      </pre>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <NotebookCell
+                key={cell.id}
+                cell={cell}
+                index={index}
+                onUpdateCode={handleUpdateCellCode}
+                onRun={handleRunCell}
+                onDelete={handleDeleteCell}
+              />
             ))
           )}
 
