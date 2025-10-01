@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sept-postgres
+    environment:
+      POSTGRES_USER: sept
+      POSTGRES_PASSWORD: sept
+      POSTGRES_DB: sept
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sept"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: sept-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: sept-api
+    environment:
+      DATABASE_URL: postgresql://sept:sept@postgres:5432/sept
+      REDIS_URL: redis://redis:6379
+      COMPUTE_SERVICE_URL: http://compute:8000
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/app/apps/api
+      - ./packages:/app/packages
+      - /app/node_modules
+    command: bun --watch apps/api/src/index.ts
+
+  compute:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.compute
+    container_name: sept-compute
+    environment:
+      DATABASE_URL: postgresql://sept:sept@postgres:5432/sept
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./services/compute:/app
+      - compute_cache:/root/.cache
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    container_name: sept-web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/graphql
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    volumes:
+      - ./apps/web:/app/apps/web
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+    command: bun --cwd apps/web dev
+
+volumes:
+  postgres_data:
+  redis_data:
+  compute_cache:

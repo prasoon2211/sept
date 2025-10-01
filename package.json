@@ -1,0 +1,31 @@
+{
+  "name": "sept",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "./dev.sh",
+    "dev:web": "bun run --filter @sept/web dev",
+    "dev:api": "bun run --filter @sept/api dev",
+    "docker:up": "docker-compose up -d postgres redis",
+    "docker:down": "docker-compose down",
+    "db:push": "cd apps/api && bun run db:push",
+    "db:studio": "cd apps/api && bun run db:studio",
+    "build": "bun run --filter ./apps/* build",
+    "lint": "bun run --filter ./apps/* lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "typecheck": "bun run --filter ./apps/* typecheck"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@t3-oss/env-core": "^0.13.8",
+    "zod": "^4.1.11"
+  }
+}

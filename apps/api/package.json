@@ -1,0 +1,35 @@
+{
+  "name": "@sept/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@apollo/server": "^5.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "better-auth": "^1.2.5",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "drizzle-orm": "^0.44.5",
+    "express": "^5.1.0",
+    "graphql": "^16.8.1",
+    "graphql-tag": "^2.12.6",
+    "postgres": "^3.4.4",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "drizzle-kit": "^0.31.5",
+    "typescript": "^5.3.3"
+  }
+}

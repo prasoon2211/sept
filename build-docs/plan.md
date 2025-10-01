@@ -87,7 +87,7 @@ We will deliver the platform in incremental phases, prioritizing core analytics 
 
 - Implement user sign-up/login (Auth.js \+ Postgres). Setup workspace and project models.
 
-- Build the notebook editor UI: add/edit/delete Python and SQL cells, Markdown text cells. Show code editor (e.g. CodeMirror) and an output pane.
+- Build the notebook editor UI: add/edit/delete Python and SQL cells, Markdown text cells. Show code editor (e.g. Monaco) and an output pane.
 
 - Wire up code execution: on “Run cell”, send SQL to the backend and display results in a table or Python execute and capture stdout. For SQL, initially support one warehouse (e.g. Postgres). For Python, run basic scripts (no long pip installs yet).
 
