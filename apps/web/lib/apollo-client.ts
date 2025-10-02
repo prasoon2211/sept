@@ -19,7 +19,7 @@ const wsLink =
     ? new GraphQLWsLink(
         createClient({
           url: WS_URL,
-        }),
+        })
       )
     : null;
 
@@ -35,7 +35,7 @@ const splitLink =
           );
         },
         wsLink,
-        httpLink,
+        httpLink
       )
     : httpLink;
 

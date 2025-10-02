@@ -60,7 +60,7 @@ app.use(
     context: async ({ req }) => ({
       pubsub,
     }),
-  }) as any, // Type conflict between Express v5 and Apollo Server - safe to ignore
+  }) as any // Type conflict between Express v5 and Apollo Server - safe to ignore
 );
 
 // Start HTTP server (which also starts WebSocket)

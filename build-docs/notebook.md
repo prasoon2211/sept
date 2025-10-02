@@ -1,7 +1,7 @@
 # Sept Notebook Architecture
 
 **Version:** 1.0
-**Last Updated:** 2025-10-01
+**Last Updated:** 2025-10-02
 
 ## Vision
 
@@ -128,11 +128,137 @@ CellOutput {
 
 ### 2.2 SQL Cell
 
-- Query databases via data connections
+**Core Capability:** Seamlessly query remote databases AND local DataFrames using SQL, with results automatically injected into the Jupyter kernel as pandas DataFrames.
+
+**Key Features:**
+
+- Query remote databases via data connections (PostgreSQL, Snowflake, BigQuery, etc.)
+- Query local DataFrames created by Python cells: `SELECT * FROM dataframe_1 WHERE amount > 100`
+- Join local and remote data: `SELECT dataframe_1.*, orders.amount FROM dataframe_1 JOIN remote_db.orders ON dataframe_1.id = orders.user_id`
+- Results automatically stored as `dataframe_N` variables in kernel namespace
+- Automatic schema detection and autocomplete for both remote tables and local DataFrames
 - Result preview with pagination
-- Automatic schema detection and autocomplete
-- Results stored as pandas DataFrame in kernel
 - Variable binding: `WHERE user_id = {{user_id_input}}`
+
+**Architecture:**
+
+Uses **DuckDB + Apache Arrow** for high-performance SQL execution:
+
+1. **Parse SQL** (SQLGlot) to identify DataFrame references (`dataframe_1`, `dataframe_2`, etc.)
+2. **Fetch DataFrames** from kernel as Arrow tables (zero-copy for most dtypes)
+3. **Execute SQL** via DuckDB in compute service
+   - Register local DataFrames in DuckDB
+   - Attach remote database connections if needed
+   - DuckDB can seamlessly query across local + remote data
+4. **Return results** as Arrow table (Arrow IPC stream used for UI preview)
+5. **Inject into kernel (compute-side)** as pandas DataFrame: `dataframe_N = arrow_table.to_pandas()` (pandas PyArrow backend)
+6. **Automatic dependency tracking**: SQLGlot AST is parsed to extract `reads` (referenced DataFrames) and `writes` (result variable)
+7. **Per-project DuckDB instance**: One DuckDB connection per project within the compute process; isolated state resets with kernel session
+
+**Example Workflows:**
+
+```sql
+-- SQL Cell 1: Query remote database
+SELECT * FROM users WHERE age > 30
+-- Creates: dataframe_1 (automatically injected into kernel)
+
+-- SQL Cell 2: Query local DataFrame (from Python or previous SQL)
+SELECT * FROM dataframe_1 WHERE city = 'NYC'
+-- Creates: dataframe_2
+-- Dependencies: reads=['dataframe_1'], writes=['dataframe_2']
+
+-- SQL Cell 3: Join local + remote data
+SELECT
+  dataframe_2.user_id,
+  dataframe_2.city,
+  orders.total_amount
+FROM dataframe_2
+JOIN remote_db.orders ON dataframe_2.user_id = orders.user_id
+-- Creates: dataframe_3
+-- Dependencies: reads=['dataframe_2'], writes=['dataframe_3']
+```
+
+**Why DuckDB + Arrow?**
+
+- **DuckDB**: Embeddable OLAP database that can query both local DataFrames and remote databases
+  - Native Arrow integration (zero-copy in many cases)
+  - Can attach PostgreSQL, Snowflake, BigQuery as remote sources
+  - SQL dialect compatible with most databases
+  - Fast analytical queries with automatic vectorization
+- **Arrow IPC**: Columnar in-memory format optimized for data transfer
+  - ~10x faster than Parquet for in-memory transfer
+  - Zero-copy reads for numeric types
+  - Designed specifically for inter-process communication
+  - Many modern DB connectors support Arrow natively (BigQuery, Snowflake, DuckDB)
+  - Seamless with pandas' PyArrow backend (default), enabling zero-copy conversions where possible
+
+**Data Flow:**
+
+```
+User writes SQL: SELECT * FROM dataframe_1 WHERE x > 10
+         ↓
+API: executeCell(type='sql', code, dataConnectionId?)
+         ↓
+Compute Service:
+  1. Parse SQL (SQLGlot) → finds reference to 'dataframe_1'
+  2. Fetch dataframe_1 from kernel as Arrow table
+  3. Create per-project DuckDB connection in memory
+  4. Register dataframe_1 as DuckDB table (zero-copy)
+  5. If remote connection, attach via DuckDB
+  6. Execute SQL query
+  7. Result available as Arrow table
+  8. Inject into kernel as pandas DataFrame (PyArrow backend):
+     dataframe_2 = arrow_table.to_pandas()
+  9. Store dependency info: reads=['dataframe_1'], writes=['dataframe_2']
+         ↓
+Frontend: Display table preview, dataframe_2 now available in all downstream cells
+```
+
+**Cell Schema Extensions:**
+
+```typescript
+interface Cell {
+  // ... existing fields
+  dataConnectionId?: string; // Which remote DB connection (if any)
+  resultVariable?: string; // Auto-generated: dataframe_1, dataframe_2, dataframe_3, etc.
+}
+```
+
+**Output Format:**
+
+```typescript
+{
+  type: "table",
+  data: {
+    columns: [
+      { name: "id", type: "int64" },
+      { name: "name", type: "string" }
+    ],
+    rows: [[1, "Alice"], [2, "Bob"]], // First 100 rows for preview
+    rowCount: 1500,                   // Total rows
+    variable: "dataframe_2",                 // Variable name in kernel
+    executionTimeMs: 1234,
+    bytesScanned?: 1024000           // For cloud warehouses
+  }
+}
+```
+
+**Dependency Tracking:**
+
+SQL cells automatically track dependencies by parsing the SQL:
+
+- Table names matching `dataframe_*` pattern are treated as DataFrame reads
+- Result variable (`dataframe_N`) added to writes
+- Remote table reads don't create dependencies (they're external data sources)
+- Remote data freshness is explicit: once fetched, results are treated like static Arrow data until the SQL cell is re-executed
+- This enables reactive execution: when `dataframe_1` changes, any SQL cell querying `dataframe_1` becomes stale
+
+**Security:**
+
+- Database credentials stored encrypted in `data_connections` table
+- Credentials never passed to kernel environment
+- All remote queries executed in compute service with centralized credential management
+- Query logging and audit trail for compliance
 
 ### 2.3 Markdown Cell
 
@@ -208,7 +334,7 @@ data_connections {
 
 - Dropdown to select data connection
 - Autocomplete for table/column names
-- Query results stored as variable: `df = sql_cell_1`
+- Query results stored as variable: `dataframe_N`
 - Result preview with sorting/filtering
 - Export to CSV/Parquet
 
@@ -647,7 +773,7 @@ class ExecutionQueueService {
       const cell = await db.query.cells.findFirst({
         where: and(
           eq(cells.projectId, projectId),
-          eq(cells.executionState, "queued"),
+          eq(cells.executionState, "queued")
         ),
         orderBy: asc(cells.queuedAt),
       });
@@ -900,7 +1026,7 @@ useServer(
     schema: makeExecutableSchema({ typeDefs, resolvers }),
     context: async (ctx) => ({ pubsub }),
   },
-  wsServer,
+  wsServer
 );
 
 httpServer.listen(4000);
@@ -923,7 +1049,7 @@ const httpLink = new HttpLink({
 const wsLink = new GraphQLWsLink(
   createClient({
     url: "ws://localhost:4000/graphql",
-  }),
+  })
 );
 
 // Split based on operation type
@@ -936,7 +1062,7 @@ const splitLink = split(
     );
   },
   wsLink,
-  httpLink,
+  httpLink
 );
 
 export const apolloClient = new ApolloClient({
@@ -968,6 +1094,8 @@ export const apolloClient = new ApolloClient({
 - Jupyter kernel manager (1 per project)
 - Python AST parser (dependency extraction)
 - DAG builder and cycle detector
+- Per-project DuckDB connection in compute
+- SQL parsing with SQLGlot
 - Database connectors (future)
 
 ---

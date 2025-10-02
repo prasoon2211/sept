@@ -43,7 +43,7 @@ export const resolvers = {
   Mutation: {
     createProject: async (
       _: any,
-      { input }: { input: { name: string; description?: string } },
+      { input }: { input: { name: string; description?: string } }
     ) => {
       return await projectService.create(input);
     },
@@ -52,7 +52,7 @@ export const resolvers = {
       {
         id,
         input,
-      }: { id: string; input: { name?: string; description?: string } },
+      }: { id: string; input: { name?: string; description?: string } }
     ) => {
       return await projectService.update(id, input);
     },
@@ -71,7 +71,7 @@ export const resolvers = {
 
     createCell: async (
       _: any,
-      { projectId, input }: { projectId: string; input: any },
+      { projectId, input }: { projectId: string; input: any }
     ) => {
       return await cellService.create(projectId, input);
     },
@@ -105,7 +105,7 @@ export const resolvers = {
 
       const dependents = await dagService.getAllDependents(
         cellId,
-        cell.projectId,
+        cell.projectId
       );
 
       if (dependents.length > 0) {
