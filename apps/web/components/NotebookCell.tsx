@@ -25,6 +25,7 @@ interface NotebookCellProps {
   onUpdateCode: (id: string, code: string) => void;
   onRun: (id: string) => void;
   onDelete: (id: string) => void;
+  hasUnsavedChanges?: boolean;
 }
 
 export const NotebookCell = memo(
@@ -34,6 +35,7 @@ export const NotebookCell = memo(
     onUpdateCode,
     onRun,
     onDelete,
+    hasUnsavedChanges = false,
   }: NotebookCellProps) {
     const getStateIndicator = () => {
       if (cell.executionState === "queued") {
@@ -83,6 +85,9 @@ export const NotebookCell = memo(
               Cell {index + 1} - {cell.type}
             </span>
             {getStateIndicator()}
+            {hasUnsavedChanges && (
+              <span className="text-xs text-gray-500 italic">Saving...</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -141,7 +146,8 @@ export const NotebookCell = memo(
       prevProps.cell.queuedAt === nextProps.cell.queuedAt &&
       JSON.stringify(prevProps.cell.outputs) ===
         JSON.stringify(nextProps.cell.outputs) &&
-      prevProps.index === nextProps.index
+      prevProps.index === nextProps.index &&
+      prevProps.hasUnsavedChanges === nextProps.hasUnsavedChanges
     );
   },
 );

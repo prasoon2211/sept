@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useSubscription } from "@apollo/client/react";
 import { GET_PROJECT, CELL_UPDATED_SUBSCRIPTION } from "@/lib/graphql/queries";
@@ -80,6 +80,25 @@ export default function NotebookPage({
   const cells: Cell[] = data?.project?.cells || [];
   const autoExecute = data?.project?.autoExecute ?? true;
 
+  // Local state for optimistic updates (UI responsiveness)
+  const [localCellCode, setLocalCellCode] = useState<Record<string, string>>(
+    {},
+  );
+
+  // Track which cells have unsaved changes
+  const [unsavedCells, setUnsavedCells] = useState<Set<string>>(new Set());
+
+  // Debounce timers for auto-save
+  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    const timers = debounceTimers.current;
+    return () => {
+      Object.values(timers).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
   const handleAddCell = useCallback(async () => {
     try {
       const order = (cells.length + 1).toString();
@@ -100,24 +119,50 @@ export default function NotebookPage({
   }, [cells.length, id, createCell]);
 
   const handleUpdateCellCode = useCallback(
-    async (cellId: string, code: string) => {
-      try {
-        await updateCell({
-          variables: {
-            id: cellId,
-            input: { code },
-          },
-        });
+    (cellId: string, code: string) => {
+      // Update local state immediately for responsive UI
+      setLocalCellCode((prev) => ({ ...prev, [cellId]: code }));
 
-        // Mark dependent cells as stale when code changes
-        await markDependentsStale({
-          variables: { cellId },
-        });
+      // Mark cell as having unsaved changes
+      setUnsavedCells((prev) => new Set(prev).add(cellId));
 
-        // No manual state updates - subscription will handle it
-      } catch (err) {
-        console.error("Error updating cell:", err);
+      // Clear existing timer for this cell
+      if (debounceTimers.current[cellId]) {
+        clearTimeout(debounceTimers.current[cellId]);
       }
+
+      // Set new timer to save after 1 second of inactivity
+      debounceTimers.current[cellId] = setTimeout(async () => {
+        try {
+          await updateCell({
+            variables: {
+              id: cellId,
+              input: { code },
+            },
+          });
+
+          // Mark dependent cells as stale when code changes
+          await markDependentsStale({
+            variables: { cellId },
+          });
+
+          // Clear local state after successful save
+          setLocalCellCode((prev) => {
+            const newState = { ...prev };
+            delete newState[cellId];
+            return newState;
+          });
+
+          // Mark cell as saved
+          setUnsavedCells((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(cellId);
+            return newSet;
+          });
+        } catch (err) {
+          console.error("Error updating cell:", err);
+        }
+      }, 1000); // 1 second debounce
     },
     [updateCell, markDependentsStale],
   );
@@ -221,16 +266,24 @@ export default function NotebookPage({
               </button>
             </div>
           ) : (
-            cells.map((cell, index) => (
-              <NotebookCell
-                key={cell.id}
-                cell={cell}
-                index={index}
-                onUpdateCode={handleUpdateCellCode}
-                onRun={handleRunCell}
-                onDelete={handleDeleteCell}
-              />
-            ))
+            cells.map((cell, index) => {
+              // Use local code if available (during debounce period), otherwise use saved code
+              const cellWithLocalCode = {
+                ...cell,
+                code: localCellCode[cell.id] ?? cell.code,
+              };
+              return (
+                <NotebookCell
+                  key={cell.id}
+                  cell={cellWithLocalCode}
+                  index={index}
+                  onUpdateCode={handleUpdateCellCode}
+                  onRun={handleRunCell}
+                  onDelete={handleDeleteCell}
+                  hasUnsavedChanges={unsavedCells.has(cell.id)}
+                />
+              );
+            })
           )}
 
           {/* Add Cell Button */}

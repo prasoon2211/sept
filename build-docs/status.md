@@ -320,6 +320,7 @@ bun run format         # Format code with Prettier
 - [x] Cell management (add, delete, reorder)
 - [x] Optimized cell rendering (no flashing on updates)
 - [x] GraphQL persistence layer (projects and cells)
+- [x] Debounced auto-save (1-second delay with visual indicator)
 
 **Reactive Execution System:**
 
@@ -358,16 +359,15 @@ bun run format         # Format code with Prettier
 
 ### 📋 Next Up (Priority Order)
 
-1. **Debounced Auto-save** - Reduce database writes (currently saves on every keystroke)
-2. **SQL Cells** - Query databases via data connections
-3. **Input Widgets** - Interactive parameters (sliders, dropdowns, text inputs)
-4. **Chart Cells** - Plotly visualization with configuration UI
-5. **File Upload** - Attach files to projects
-6. **Markdown Cells** - Rich text documentation
-7. **Cell Reordering** - Drag and drop to reorder cells
-8. **Cell Execution Time Display** - Show duration in UI
-9. **Cancel Cell Execution** - Stop running cells
-10. **Execution History** - View past outputs and results
+1. **SQL Cells** - Query databases via data connections
+2. **Input Widgets** - Interactive parameters (sliders, dropdowns, text inputs)
+3. **Chart Cells** - Plotly visualization with configuration UI
+4. **File Upload** - Attach files to projects
+5. **Markdown Cells** - Rich text documentation
+6. **Cell Reordering** - Drag and drop to reorder cells
+7. **Cell Execution Time Display** - Show duration in UI
+8. **Cancel Cell Execution** - Stop running cells
+9. **Execution History** - View past outputs and results
 
 ---
 
@@ -379,11 +379,10 @@ bun run format         # Format code with Prettier
 4. **Type Generation:** GraphQL codegen not setup - frontend types manually maintained
 5. **Migrations:** Using `drizzle-kit push` directly - should use proper migrations for production
 6. **Cell Ordering:** Cells use simple string IDs - should use proper ordering system (fractional indexing)
-7. **Auto-save:** Cell code updates save immediately on every keystroke - should implement debouncing
-8. **SQL Execution:** Not yet implemented in compute service
-9. **Output Limits:** No truncation for large outputs
-10. **Kernel Cleanup:** No automatic kernel shutdown for idle sessions
-11. **Environment Variables:** Web app removed t3-env, now uses process.env directly (less type safety)
+7. **SQL Execution:** Not yet implemented in compute service
+8. **Output Limits:** No truncation for large outputs
+9. **Kernel Cleanup:** No automatic kernel shutdown for idle sessions
+10. **Environment Variables:** Web app removed t3-env, now uses process.env directly (less type safety)
 
 ---
 
