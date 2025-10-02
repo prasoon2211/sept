@@ -34,6 +34,7 @@ export const projects = pgTable('projects', {
   workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
+  autoExecute: boolean('auto_execute').notNull().default(true), // Auto-run dependent cells
   createdBy: uuid('created_by').notNull().references(() => users.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -48,6 +49,13 @@ export const cells = pgTable('cells', {
   outputs: jsonb('outputs'), // Array of output objects
   metadata: jsonb('metadata'), // Cell-specific config (e.g., chart config, SQL connection)
   order: varchar('order', { length: 50 }).notNull(), // For ordering cells
+
+  // Dependency tracking for reactive execution
+  reads: jsonb('reads').$type<string[]>(), // Variables this cell reads
+  writes: jsonb('writes').$type<string[]>(), // Variables this cell writes
+  executionState: varchar('execution_state', { length: 20 }).default('idle'), // idle, running, success, error, stale
+  lastExecutedAt: timestamp('last_executed_at'),
+
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

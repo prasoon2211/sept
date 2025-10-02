@@ -17,6 +17,12 @@ export const typeDefs = gql`
     deleteCell(id: ID!): Boolean!
 
     executeCell(id: ID!): CellExecutionResult!
+    markCellDependentsStale(cellId: ID!): StaleResult!
+  }
+
+  type StaleResult {
+    staleCellIds: [ID!]!
+    count: Int!
   }
 
   scalar DateTime
@@ -37,6 +43,10 @@ export const typeDefs = gql`
     code: String
     outputs: [CellOutput!]
     order: String!
+    reads: [String!]
+    writes: [String!]
+    executionState: String
+    lastExecutedAt: DateTime
     createdAt: String!
     updatedAt: String!
   }

@@ -13,6 +13,10 @@ interface UpdateCellInput {
   code?: string;
   order?: string;
   outputs?: any;
+  reads?: string[];
+  writes?: string[];
+  executionState?: string;
+  lastExecutedAt?: Date;
 }
 
 export const cellService = {
@@ -40,6 +44,10 @@ export const cellService = {
     if (input.code !== undefined) updateData.code = input.code;
     if (input.order) updateData.order = input.order;
     if (input.outputs !== undefined) updateData.outputs = input.outputs;
+    if (input.reads !== undefined) updateData.reads = input.reads;
+    if (input.writes !== undefined) updateData.writes = input.writes;
+    if (input.executionState) updateData.executionState = input.executionState;
+    if (input.lastExecutedAt) updateData.lastExecutedAt = input.lastExecutedAt;
 
     const result = await db
       .update(cells)

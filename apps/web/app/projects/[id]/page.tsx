@@ -4,7 +4,7 @@ import { useState, useEffect, use, useCallback } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "@apollo/client/react";
 import { GET_PROJECT } from "@/lib/graphql/queries";
-import { CREATE_CELL, UPDATE_CELL, DELETE_CELL, EXECUTE_CELL } from "@/lib/graphql/mutations";
+import { CREATE_CELL, UPDATE_CELL, DELETE_CELL, EXECUTE_CELL, MARK_CELL_DEPENDENTS_STALE } from "@/lib/graphql/mutations";
 import { NotebookCell } from "@/components/NotebookCell";
 
 interface Cell {
@@ -13,6 +13,10 @@ interface Cell {
   code: string;
   outputs: any[] | null;
   order: string;
+  reads?: string[];
+  writes?: string[];
+  executionState?: string;
+  lastExecutedAt?: string;
   isRunning?: boolean;
 }
 
@@ -26,6 +30,7 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
   const [updateCell] = useMutation(UPDATE_CELL);
   const [deleteCell] = useMutation(DELETE_CELL);
   const [executeCell] = useMutation(EXECUTE_CELL);
+  const [markDependentsStale] = useMutation(MARK_CELL_DEPENDENTS_STALE);
 
   const [cells, setCells] = useState<Cell[]>([]);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
@@ -80,10 +85,25 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
           input: { code },
         },
       });
+
+      // Mark dependent cells as stale when code changes
+      const result = await markDependentsStale({
+        variables: { cellId: id },
+      });
+
+      if (result.data?.markCellDependentsStale.staleCellIds.length > 0) {
+        // Update local state to mark cells as stale
+        const staleCellIds = result.data.markCellDependentsStale.staleCellIds;
+        setCells((prevCells) =>
+          prevCells.map((cell) =>
+            staleCellIds.includes(cell.id) ? { ...cell, executionState: 'stale' } : cell
+          )
+        );
+      }
     } catch (err) {
       console.error("Error updating cell:", err);
     }
-  }, [updateCell]);
+  }, [updateCell, markDependentsStale]);
 
   const handleDeleteCell = useCallback(async (id: string) => {
     try {
@@ -99,7 +119,7 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
 
   const handleRunCell = useCallback(async (id: string) => {
     // Set running state
-    setCells((prevCells) => prevCells.map((c) => (c.id === id ? { ...c, isRunning: true, outputs: null } : c)));
+    setCells((prevCells) => prevCells.map((c) => (c.id === id ? { ...c, isRunning: true, outputs: null, executionState: 'running' } : c)));
 
     try {
       const result = await executeCell({
@@ -107,11 +127,16 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
       });
 
       if (result.data?.executeCell) {
-        // Update cell with outputs
+        // Update cell with outputs and execution state
         setCells((prevCells) =>
           prevCells.map((c) =>
             c.id === id
-              ? { ...c, outputs: result.data.executeCell.outputs, isRunning: false }
+              ? {
+                  ...c,
+                  outputs: result.data.executeCell.outputs,
+                  isRunning: false,
+                  executionState: result.data.executeCell.success ? 'success' : 'error'
+                }
               : c
           )
         );
@@ -120,7 +145,7 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
       console.error("Error executing cell:", err);
       setCells((prevCells) =>
         prevCells.map((c) =>
-          c.id === id ? { ...c, outputs: [{ type: "error", data: String(err) }], isRunning: false } : c
+          c.id === id ? { ...c, outputs: [{ type: "error", data: String(err) }], isRunning: false, executionState: 'error' } : c
         )
       );
     }

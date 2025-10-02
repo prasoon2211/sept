@@ -26,6 +26,10 @@ export const GET_PROJECT = gql`
           data
         }
         order
+        reads
+        writes
+        executionState
+        lastExecutedAt
       }
     }
   }

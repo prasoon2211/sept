@@ -52,3 +52,12 @@ export const EXECUTE_CELL = gql`
     }
   }
 `;
+
+export const MARK_CELL_DEPENDENTS_STALE = gql`
+  mutation MarkCellDependentsStale($cellId: ID!) {
+    markCellDependentsStale(cellId: $cellId) {
+      staleCellIds
+      count
+    }
+  }
+`;

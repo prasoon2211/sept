@@ -1,6 +1,7 @@
 import { GraphQLScalarType, Kind } from 'graphql';
 import { projectService } from '../services/projects.js';
 import { cellService } from '../services/cells.js';
+import { dagService } from '../services/dag.js';
 import { env } from '../env.js';
 
 // DateTime scalar for proper date serialization
@@ -64,27 +65,55 @@ export const resolvers = {
         throw new Error('Cell not found');
       }
 
-      // Call compute service
+      // Mark cell as running
+      await cellService.update(id, {
+        executionState: 'running',
+      });
+
+      // Call compute service with project ID as session ID for kernel persistence
       const response = await fetch(`${env.COMPUTE_SERVICE_URL}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code: cell.code,
           language: cell.type,
+          session_id: cell.projectId, // Use project ID as session for persistent kernel
         }),
       });
 
       const result = await response.json();
 
-      // Update cell with outputs
+      // Update cell with outputs, dependencies, and execution state
       await cellService.update(id, {
         outputs: result.outputs,
+        reads: result.dependencies?.reads || [],
+        writes: result.dependencies?.writes || [],
+        executionState: result.success ? 'success' : 'error',
+        lastExecutedAt: new Date(),
       });
 
       return {
         success: result.success,
         outputs: result.outputs,
         error: result.error,
+      };
+    },
+
+    markCellDependentsStale: async (_: any, { cellId }: { cellId: string }) => {
+      const cell = await cellService.getById(cellId);
+      if (!cell) {
+        throw new Error('Cell not found');
+      }
+
+      const dependents = await dagService.getAllDependents(cellId, cell.projectId);
+
+      if (dependents.length > 0) {
+        await dagService.markDependentsAsStale(cellId, cell.projectId);
+      }
+
+      return {
+        staleCellIds: dependents,
+        count: dependents.length,
       };
     },
   },

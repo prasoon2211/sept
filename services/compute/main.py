@@ -6,6 +6,8 @@ import logging
 import sys
 from io import StringIO
 import traceback
+from kernel_manager import kernel_manager
+from dependency_analyzer import analyze_dependencies
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,6 +37,7 @@ class ExecuteCodeResponse(BaseModel):
     outputs: List[Dict[str, Any]]
     error: Optional[str] = None
     session_id: str
+    dependencies: Dict[str, List[str]] = {}  # { "reads": [...], "writes": [...] }
 
 
 @app.get("/health")
@@ -98,12 +101,19 @@ async def execute_code(request: ExecuteCodeRequest):
     """
     try:
         if request.language.lower() == "python":
-            success, outputs, error = execute_python_code(request.code)
+            # Analyze dependencies before execution
+            reads, writes, dep_error = analyze_dependencies(request.code)
+            dependencies = {"reads": reads, "writes": writes}
+
+            # Use Jupyter kernel for persistent sessions
+            session_id = request.session_id or "default"
+            success, outputs, error = await kernel_manager.execute_code(session_id, request.code)
             return ExecuteCodeResponse(
                 success=success,
                 outputs=outputs,
                 error=error,
-                session_id=request.session_id or "default"
+                session_id=session_id,
+                dependencies=dependencies
             )
         elif request.language.lower() == "sql":
             # TODO: Implement SQL execution
@@ -122,6 +132,35 @@ async def execute_code(request: ExecuteCodeRequest):
             error=str(e),
             session_id=request.session_id or "default"
         )
+
+
+@app.post("/kernel/restart")
+async def restart_kernel(session_id: str):
+    """Restart a kernel session."""
+    try:
+        kernel_manager.restart_kernel(session_id)
+        return {"status": "success", "message": f"Kernel restarted for session {session_id}"}
+    except Exception as e:
+        logger.error(f"Error restarting kernel: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/kernel/shutdown")
+async def shutdown_kernel(session_id: str):
+    """Shutdown a kernel session."""
+    try:
+        kernel_manager.shutdown_kernel(session_id)
+        return {"status": "success", "message": f"Kernel shutdown for session {session_id}"}
+    except Exception as e:
+        logger.error(f"Error shutting down kernel: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup all kernels on application shutdown."""
+    logger.info("Shutting down compute service, cleaning up kernels...")
+    kernel_manager.shutdown_all()
 
 
 if __name__ == "__main__":
