@@ -12,6 +12,7 @@ export const env = createEnv({
     REDIS_PORT: z.coerce.number().default(6380),
     COMPUTE_SERVICE_URL: z.string().url().default("http://localhost:8547"),
     AUTH_SECRET: z.string().min(32).optional(),
+    BASE_URL: z.string().url().optional(), // For production deployment
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),

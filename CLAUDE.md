@@ -12,6 +12,7 @@ Currently in **Phase 1: Foundation & Setup** - basic notebook functionality with
 
 - **Frontend**: Next.js 15 (Turbopack), React 19, TypeScript, TailwindCSS, Apollo Client
 - **Backend API**: Bun runtime, Apollo Server (GraphQL), TypeScript, Drizzle ORM
+- **Authentication**: Better-auth with organization plugin, email/password auth
 - **Compute Service**: Python 3.11, FastAPI, Jupyter kernels for persistent execution
 - **Database**: PostgreSQL 15 (port 5433)
 - **Cache**: Redis (port 6380)
@@ -91,8 +92,20 @@ sept/
 
 Schema is defined in `apps/api/src/models/schema.ts` using Drizzle ORM:
 
-- **users**: User accounts
-- **workspaces**: Organizations with slug-based routing
+**Better-auth Tables (Authentication & Organizations):**
+- **user**: Better-auth user table (text ID, email, name, emailVerified)
+- **session**: User sessions with expiry and tokens
+- **account**: Authentication accounts (password hash, OAuth tokens)
+- **verification**: Email verification tokens
+- **organization**: Organizations with domain-based auto-join support
+- **member**: Organization memberships with roles (owner/admin/member)
+- **invitation**: Organization invitations with status tracking
+
+**Legacy Tables (Being Deprecated):**
+- **users**: Old UUID-based user table (kept for backward compatibility)
+
+**Application Tables:**
+- **workspaces**: Organizations with slug-based routing (to be merged with organizations)
 - **workspace_members**: User-workspace relationships with roles (admin/editor/viewer)
 - **projects**: Notebooks containing cells
 - **cells**: Individual code/markdown/chart cells with execution state
@@ -180,6 +193,38 @@ Schema defined in `apps/api/src/schema/index.ts`:
 - Mutations: `createProject`, `createCell`, `executeCell`, `markCellDependentsStale`
 - Custom scalar: `DateTime` for timestamp serialization
 
+## Authentication & Authorization
+
+### Better-auth Setup
+
+The app uses [better-auth](https://better-auth.com) for authentication with full B2B organization support:
+
+**Features:**
+- Email/password authentication
+- Organization management with roles (owner/admin/member)
+- Invitation system with email notifications
+- Domain-based auto-join (users with matching email domains automatically join orgs)
+- Session management with 7-day expiry
+
+**Key Files:**
+- `apps/api/src/lib/auth.ts`: Better-auth server configuration
+- `apps/web/lib/auth-client.ts`: Better-auth React client
+- `apps/web/app/api/auth/[...all]/route.ts`: Next.js auth API routes
+- Auth endpoints: `http://localhost:4000/api/auth/*`
+
+**Authentication Flow:**
+1. User signs up at `/auth/sign-up` (frontend)
+2. Better-auth creates user in `user` table with password in `account` table
+3. Session created in `session` table with token
+4. If email domain matches an organization's `allowedDomains`, user auto-joins
+5. GraphQL context includes `user` and `session` for all authenticated requests
+
+**Organization Features:**
+- Create organization: `auth.organization.create({ name, slug, metadata })`
+- Invite members: `auth.organization.inviteMember({ organizationId, email, role })`
+- Domain-based auto-join: Set `allowedDomains` field (comma-separated) on organization
+- Roles: owner (full control), admin (manage members), member (basic access)
+
 ## Environment Variables
 
 ### API (`apps/api`)
@@ -187,6 +232,9 @@ Schema defined in `apps/api/src/schema/index.ts`:
 - `DATABASE_URL`: Postgres connection (default: postgres://sept:sept@localhost:5433/sept)
 - `PORT`: API port (default: 4000)
 - `COMPUTE_SERVICE_URL`: Compute service endpoint (default: http://localhost:8000)
+- `AUTH_SECRET`: Secret for better-auth (min 32 chars, required for production)
+- `BASE_URL`: Base URL for production deployment (e.g., https://sept.app)
+- `NODE_ENV`: Environment (development/production/test)
 
 ### Web (`apps/web`)
 

@@ -8,7 +8,112 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 
-// Users table
+// ============================================
+// BETTER-AUTH TABLES
+// ============================================
+
+// Better-auth user table
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("emailVerified").notNull(),
+  image: text("image"),
+  createdAt: timestamp("createdAt").notNull(),
+  updatedAt: timestamp("updatedAt").notNull(),
+});
+
+// Better-auth session table
+export const session = pgTable("session", {
+  id: text("id").primaryKey(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("createdAt").notNull(),
+  updatedAt: timestamp("updatedAt").notNull(),
+  ipAddress: text("ipAddress"),
+  userAgent: text("userAgent"),
+  userId: text("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+});
+
+// Better-auth account table (for OAuth, password, etc.)
+export const account = pgTable("account", {
+  id: text("id").primaryKey(),
+  accountId: text("accountId").notNull(),
+  providerId: text("providerId").notNull(),
+  userId: text("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  accessToken: text("accessToken"),
+  refreshToken: text("refreshToken"),
+  idToken: text("idToken"),
+  accessTokenExpiresAt: timestamp("accessTokenExpiresAt"),
+  refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt"),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: timestamp("createdAt").notNull(),
+  updatedAt: timestamp("updatedAt").notNull(),
+});
+
+// Better-auth verification table
+export const verification = pgTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt"),
+  updatedAt: timestamp("updatedAt"),
+});
+
+// ============================================
+// BETTER-AUTH ORGANIZATION PLUGIN TABLES
+// ============================================
+
+// Organization table with domain-based auto-join support
+export const organization = pgTable("organization", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").unique(),
+  logo: text("logo"),
+  createdAt: timestamp("createdAt").notNull(),
+  metadata: text("metadata"),
+  allowedDomains: text("allowedDomains"), // Custom field for domain-based auto-join (comma-separated)
+});
+
+// Organization member table
+export const member = pgTable("member", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  userId: text("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // owner, admin, member
+  createdAt: timestamp("createdAt").notNull(),
+});
+
+// Organization invitation table
+export const invitation = pgTable("invitation", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: text("role"),
+  status: text("status").notNull(), // pending, accepted, rejected, cancelled
+  expiresAt: timestamp("expiresAt").notNull(),
+  inviterId: text("inviterId")
+    .notNull()
+    .references(() => user.id),
+});
+
+// ============================================
+// LEGACY TABLES (keep for backward compatibility, can be migrated)
+// ============================================
+
+// OLD Users table (will be deprecated in favor of better-auth user table)
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 255 }).notNull().unique(),
@@ -27,20 +132,20 @@ export const workspaces = pgTable("workspaces", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Workspace members
+// Workspace members (updated to reference better-auth user table)
 export const workspaceMembers = pgTable("workspace_members", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  userId: uuid("user_id")
+  userId: text("user_id")
     .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
+    .references(() => user.id, { onDelete: "cascade" }),
   role: varchar("role", { length: 50 }).notNull().default("viewer"), // admin, editor, viewer
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// Projects (Notebooks)
+// Projects (Notebooks) (updated to reference better-auth user table)
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id")
@@ -49,9 +154,9 @@ export const projects = pgTable("projects", {
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   autoExecute: boolean("auto_execute").notNull().default(true), // Auto-run dependent cells
-  createdBy: uuid("created_by")
+  createdBy: text("created_by")
     .notNull()
-    .references(() => users.id),
+    .references(() => user.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -80,35 +185,35 @@ export const cells = pgTable("cells", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Cell comments
+// Cell comments (updated to reference better-auth user table)
 export const cellComments = pgTable("cell_comments", {
   id: uuid("id").primaryKey().defaultRandom(),
   cellId: uuid("cell_id")
     .notNull()
     .references(() => cells.id, { onDelete: "cascade" }),
-  userId: uuid("user_id")
+  userId: text("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => user.id),
   content: text("content").notNull(),
   resolved: boolean("resolved").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Project versions (for history)
+// Project versions (for history) (updated to reference better-auth user table)
 export const projectVersions = pgTable("project_versions", {
   id: uuid("id").primaryKey().defaultRandom(),
   projectId: uuid("project_id")
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   snapshot: jsonb("snapshot").notNull(), // Full project state
-  createdBy: uuid("created_by")
+  createdBy: text("created_by")
     .notNull()
-    .references(() => users.id),
+    .references(() => user.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// Data connections
+// Data connections (updated to reference better-auth user table)
 export const dataConnections = pgTable("data_connections", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id")
@@ -117,9 +222,9 @@ export const dataConnections = pgTable("data_connections", {
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(), // snowflake, bigquery, redshift, postgres, duckdb
   config: jsonb("config").notNull(), // Encrypted credentials and connection details
-  createdBy: uuid("created_by")
+  createdBy: text("created_by")
     .notNull()
-    .references(() => users.id),
+    .references(() => user.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

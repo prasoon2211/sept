@@ -1,23 +1,26 @@
 import { db } from "../models/db.js";
-import { projects, cells, users, workspaces } from "../models/schema.js";
+import { projects, cells, user, workspaces } from "../models/schema.js";
 import { eq } from "drizzle-orm";
 
 // Ensure default workspace and user exist
 async function ensureDefaultWorkspace() {
-  const defaultUserId = "00000000-0000-0000-0000-000000000000";
+  const defaultUserId = "default-user";
   const defaultWorkspaceId = "00000000-0000-0000-0000-000000000000";
 
-  // Check if default user exists
+  // Check if default user exists (using better-auth user table with text ID)
   const existingUser = await db
     .select()
-    .from(users)
-    .where(eq(users.id, defaultUserId));
+    .from(user)
+    .where(eq(user.id, defaultUserId));
 
   if (existingUser.length === 0) {
-    await db.insert(users).values({
+    await db.insert(user).values({
       id: defaultUserId,
       email: "default@sept.dev",
       name: "Default User",
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
   }
 
