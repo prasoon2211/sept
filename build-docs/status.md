@@ -1,7 +1,7 @@
 # Sept - Project Status
 
 **Last Updated:** 2025-10-02
-**Current Phase:** Phase 1 - Reactive Execution Engine ✅ COMPLETE
+**Current Phase:** Phase 1 - Reactive Execution Engine with WebSocket Subscriptions ✅ COMPLETE
 
 ---
 
@@ -12,6 +12,7 @@ Sept is an open-source Hex-like collaborative data analytics platform that combi
 ### Tech Stack
 
 **Frontend:**
+
 - Next.js 15 (App Router)
 - React 19
 - TypeScript
@@ -19,19 +20,24 @@ Sept is an open-source Hex-like collaborative data analytics platform that combi
 - Apollo Client (GraphQL)
 
 **Backend API:**
+
 - Bun runtime
-- Apollo Server v5 (GraphQL)
+- Apollo Server v4 (GraphQL)
+- GraphQL WebSocket subscriptions (graphql-ws)
 - TypeScript
 - Drizzle ORM
 - PostgreSQL 15
+- Redis (pub/sub for real-time updates)
 
 **Compute Service:**
+
 - Python 3.11+
 - FastAPI
 - Jupyter kernel management (planned)
 - Database connectors (Snowflake, BigQuery, Redshift, DuckDB)
 
 **Infrastructure:**
+
 - Docker & Docker Compose
 - PostgreSQL (port 5433)
 - Redis (port 6380)
@@ -100,6 +106,7 @@ sept/
 8. **data_connections** - External data warehouse connections (Snowflake, BigQuery, etc.)
 
 All tables include:
+
 - UUID primary keys
 - Timestamps (created_at, updated_at)
 - Foreign key relationships with cascading deletes
@@ -112,6 +119,7 @@ All tables include:
 Using **t3-env** for type-safe environment variables with Zod validation.
 
 ### API Server (`apps/api/src/env.ts`)
+
 - `DATABASE_URL` - PostgreSQL connection (default: `postgresql://sept:sept@localhost:5433/sept`)
 - `REDIS_URL` - Redis connection (default: `redis://localhost:6380`)
 - `COMPUTE_SERVICE_URL` - Python compute service (default: `http://localhost:8000`)
@@ -120,6 +128,7 @@ Using **t3-env** for type-safe environment variables with Zod validation.
 - `NODE_ENV` - Environment mode (default: `development`)
 
 ### Web Frontend (`apps/web/env.ts`)
+
 - `NEXT_PUBLIC_API_URL` - GraphQL API endpoint (default: `http://localhost:4000/graphql`)
 - `NODE_ENV` - Environment mode (default: `development`)
 
@@ -132,6 +141,7 @@ Using **t3-env** for type-safe environment variables with Zod validation.
 ### ✅ Phase 1: Foundation & Setup (Weeks 1-2)
 
 **Week 1: Project Scaffolding**
+
 - [x] Initialize Bun monorepo with workspaces
 - [x] Create Next.js 15 app with TypeScript + TailwindCSS
 - [x] Create Bun + Apollo GraphQL API server
@@ -141,6 +151,7 @@ Using **t3-env** for type-safe environment variables with Zod validation.
 - [x] Resolve port conflicts (5433 for Postgres, 6380 for Redis)
 
 **Week 2: Core Infrastructure**
+
 - [x] Design and implement complete database schema with Drizzle ORM
 - [x] Implement type-safe environment variables with t3-env
 - [x] Configure CORS for frontend-backend communication
@@ -150,6 +161,7 @@ Using **t3-env** for type-safe environment variables with Zod validation.
 - [x] Verify GraphQL API with test query
 
 **Week 3-4: Notebook UI & Python Execution** ✅ COMPLETE
+
 - [x] Build dashboard page with project list
 - [x] Create notebook editor page with cell UI
 - [x] Implement cell management (add/delete cells)
@@ -170,6 +182,7 @@ Using **t3-env** for type-safe environment variables with Zod validation.
 - [x] Fix language case sensitivity in compute service
 
 **Current Status:**
+
 - ✅ All services start successfully
 - ✅ GraphQL API responding at `http://localhost:4000/graphql`
 - ✅ Next.js frontend at `http://localhost:3000`
@@ -187,11 +200,13 @@ Using **t3-env** for type-safe environment variables with Zod validation.
 ## How to Run
 
 ### Quick Start (One Command)
+
 ```bash
 bun run dev
 ```
 
 This automatically:
+
 1. Starts PostgreSQL and Redis in Docker
 2. Pushes database schema
 3. Starts GraphQL API server
@@ -199,6 +214,7 @@ This automatically:
 5. Starts Python compute service (if venv exists)
 
 ### Manual Start (Step by Step)
+
 ```bash
 # 1. Start Docker services
 docker-compose up -d postgres redis
@@ -222,6 +238,7 @@ python main.py
 ```
 
 ### Other Commands
+
 ```bash
 bun run docker:up      # Start only Docker services
 bun run docker:down    # Stop Docker services
@@ -235,14 +252,14 @@ bun run format         # Format code with Prettier
 
 ## Service Endpoints
 
-| Service | URL | Status |
-|---------|-----|--------|
-| Web Frontend | http://localhost:3000 | ✅ Running |
-| GraphQL API | http://localhost:4000/graphql | ✅ Running |
-| Compute Service | http://localhost:8547 | ✅ Running (Python execution working) |
-| PostgreSQL | localhost:5433 | ✅ Running |
-| Redis | localhost:6380 | ✅ Running |
-| Drizzle Studio | http://localhost:4983 | ✅ Available via `bun run db:studio` |
+| Service         | URL                           | Status                                |
+| --------------- | ----------------------------- | ------------------------------------- |
+| Web Frontend    | http://localhost:3000         | ✅ Running                            |
+| GraphQL API     | http://localhost:4000/graphql | ✅ Running                            |
+| Compute Service | http://localhost:8547         | ✅ Running (Python execution working) |
+| PostgreSQL      | localhost:5433                | ✅ Running                            |
+| Redis           | localhost:6380                | ✅ Running                            |
+| Drizzle Studio  | http://localhost:4983         | ✅ Available via `bun run db:studio`  |
 
 ---
 
@@ -251,6 +268,7 @@ bun run format         # Format code with Prettier
 ### Phase 1: Core Notebook MVP (Weeks 3-8)
 
 **Week 3-4: Notebook UI & GraphQL API** ✅ COMPLETE
+
 - [x] Build project list/create UI components
 - [x] Implement notebook editor with cell container
 - [x] Create Python cell component with textarea editor
@@ -264,6 +282,7 @@ bun run format         # Format code with Prettier
 - [ ] Create SQL and Markdown cell components
 
 **Week 5-6: Code Execution** 🚧 IN PROGRESS
+
 - [x] Handle Python code execution with stdout/stderr capture
 - [x] Add error handling with traceback display
 - [x] Route execution through GraphQL API
@@ -275,6 +294,7 @@ bun run format         # Format code with Prettier
 - [ ] Add execution timeout logic
 
 **Week 7-8: Visualization & Persistence**
+
 - [ ] Integrate Plotly.js for chart rendering
 - [ ] Create Chart cell type with configuration UI
 - [ ] Build basic table rendering for SQL results
@@ -292,6 +312,7 @@ bun run format         # Format code with Prettier
 ### ✅ Completed Features
 
 **Core Notebook Functionality:**
+
 - [x] Monaco Editor integration (syntax highlighting, autocomplete)
 - [x] Jupyter kernel manager with persistent sessions
 - [x] Variable persistence across cells
@@ -301,23 +322,35 @@ bun run format         # Format code with Prettier
 - [x] GraphQL persistence layer (projects and cells)
 
 **Reactive Execution System:**
+
 - [x] Python AST parser for dependency extraction
 - [x] Automatic detection of variable reads/writes
-- [x] Database schema for dependency tracking
-- [x] Execution state tracking (idle, running, success, error, stale)
+- [x] Database schema for dependency tracking (reads, writes, executionState)
+- [x] Execution state tracking (idle, queued, running, success, error, stale)
 - [x] Dependencies stored in database on each execution
 - [x] DAG builder with order-aware dependency resolution
 - [x] Handles variable redefinition correctly (Cell 4's x shadows Cell 2's x)
 - [x] Automatic stale detection when upstream cells change
-- [x] Visual state indicators (Running/Success/Error/Stale badges)
+- [x] Visual state indicators (Queued/Running/Success/Error/Stale badges with colors)
 - [x] Cycle detection in dependency graph
 - [x] Transitive dependency closure calculation
+- [x] **Sequential FIFO execution queue** (one cell at a time per project)
+- [x] **Real-time UI updates via WebSocket subscriptions** (no polling)
+- [x] **Reactive mode with auto-execution** (toggle on/off)
+- [x] **Auto-queuing of dependent cells** when upstream cells complete
+- [x] **Cell state machine** with proper transitions
+- [x] **Redis pub/sub** for scalable real-time updates
 
 **Architecture:**
+
 - Each project gets one persistent Jupyter kernel
 - Dependencies automatically extracted via static analysis
 - Execution outputs cached in database
-- Ready for DAG-based reactive execution
+- **Backend-driven state**: Database is single source of truth
+- **WebSocket subscriptions**: Real-time updates pushed to frontend via GraphQL subscriptions
+- **Execution queue**: Sequential FIFO processing, one cell at a time per project
+- **Pure reactive frontend**: No local execution state, Apollo cache auto-updates from subscriptions
+- **Reactive execution**: Dependent cells automatically execute when upstream cells complete (if enabled)
 
 ### 🚧 In Progress
 
@@ -325,14 +358,16 @@ bun run format         # Format code with Prettier
 
 ### 📋 Next Up (Priority Order)
 
-1. **Run with Dependencies** - Execute upstream cells first (one-click to get cell up-to-date)
-2. **Debounced Auto-save** - Reduce database writes (currently saves on every keystroke)
-3. **SQL Cells** - Query databases via data connections
-4. **Input Widgets** - Interactive parameters (sliders, dropdowns, text inputs)
-5. **Chart Cells** - Plotly visualization with configuration UI
-6. **File Upload** - Attach files to projects
-7. **Markdown Cells** - Rich text documentation
-8. **Cell Reordering** - Drag and drop to reorder cells
+1. **Debounced Auto-save** - Reduce database writes (currently saves on every keystroke)
+2. **SQL Cells** - Query databases via data connections
+3. **Input Widgets** - Interactive parameters (sliders, dropdowns, text inputs)
+4. **Chart Cells** - Plotly visualization with configuration UI
+5. **File Upload** - Attach files to projects
+6. **Markdown Cells** - Rich text documentation
+7. **Cell Reordering** - Drag and drop to reorder cells
+8. **Cell Execution Time Display** - Show duration in UI
+9. **Cancel Cell Execution** - Stop running cells
+10. **Execution History** - View past outputs and results
 
 ---
 
@@ -348,12 +383,14 @@ bun run format         # Format code with Prettier
 8. **SQL Execution:** Not yet implemented in compute service
 9. **Output Limits:** No truncation for large outputs
 10. **Kernel Cleanup:** No automatic kernel shutdown for idle sessions
+11. **Environment Variables:** Web app removed t3-env, now uses process.env directly (less type safety)
 
 ---
 
 ## Architecture Decisions
 
 ### Why GraphQL over REST?
+
 - Type-safe API with codegen for frontend
 - Flexible querying (avoid over-fetching nested notebook data)
 - Built-in subscriptions for real-time collaboration (Phase 2)
@@ -361,24 +398,28 @@ bun run format         # Format code with Prettier
 - Matches Hex's architecture
 
 ### Why Bun over Node?
+
 - Faster TypeScript execution
 - Built-in TypeScript support (no ts-node)
 - Better package management
 - Compatible with existing Node ecosystem
 
 ### Why Drizzle over Prisma?
+
 - Lighter weight, closer to SQL
 - Better TypeScript inference
 - More control over queries
 - Excellent migration tooling
 
 ### Why t3-env for Environment Variables?
+
 - Type-safe environment variables
 - Runtime validation with Zod
 - Clear separation of server/client vars
 - Defaults defined in code, not in .env files
 
 ### Why Separate Python Compute Service?
+
 - Python-native for Jupyter ecosystem
 - Async execution support
 - Isolated from Node/Bun runtime

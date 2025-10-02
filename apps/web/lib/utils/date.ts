@@ -5,10 +5,10 @@ export function formatDate(dateString: string): string {
   const dateYear = date.getFullYear();
 
   const day = date.getDate();
-  const month = date.toLocaleString('en-US', { month: 'short' });
-  const time = date.toLocaleString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
+  const month = date.toLocaleString("en-US", { month: "short" });
+  const time = date.toLocaleString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
     hour12: true,
   });
 

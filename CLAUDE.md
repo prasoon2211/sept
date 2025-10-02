@@ -27,6 +27,7 @@ bun run docker:down         # Stop Docker services
 ```
 
 The main `bun run dev` command executes `./dev.sh` which:
+
 1. Starts PostgreSQL (5433) and Redis (6380) in Docker
 2. Runs database schema migrations automatically
 3. Starts GraphQL API (port 4000)
@@ -104,11 +105,13 @@ Schema is defined in `apps/api/src/models/schema.ts` using Drizzle ORM:
 ### Cell Dependency System
 
 Cells track variable dependencies:
+
 - `reads`: Variables this cell reads (e.g., `['df', 'x']`)
 - `writes`: Variables this cell writes (e.g., `['result']`)
 - `executionState`: idle, running, success, error, stale
 
 When a cell's code changes:
+
 1. Cell is marked as modified
 2. `markCellDependentsStale` mutation marks downstream cells as `stale`
 3. DAG service (in `apps/api/src/services/dag.ts`) traverses dependency graph
@@ -126,6 +129,7 @@ When a cell's code changes:
 5. **Frontend** polls or receives updates to display results
 
 Key files:
+
 - `apps/api/src/resolvers/index.ts`: GraphQL resolvers, `executeCell` mutation
 - `services/compute/main.py`: FastAPI endpoints
 - `services/compute/kernel_manager.py`: Jupyter kernel lifecycle
@@ -145,7 +149,7 @@ Unlike typical notebook systems that use one kernel per notebook, Sept maintains
 
 ```typescript
 // In executeCell mutation (apps/api/src/resolvers/index.ts)
-session_id: cell.projectId  // All cells in project share same kernel
+session_id: cell.projectId; // All cells in project share same kernel
 ```
 
 ### Dependency Tracking
@@ -159,6 +163,7 @@ reads, writes, error = analyze_dependencies(code)
 ```
 
 This enables:
+
 - Reactive execution (future): Auto-run dependent cells when upstream changes
 - Stale detection: Mark downstream cells when dependencies change
 - Execution ordering: Topological sort for "Run All"
@@ -170,6 +175,7 @@ Cells use a string-based `order` field (not integer) to enable efficient reorder
 ### GraphQL Schema
 
 Schema defined in `apps/api/src/schema/index.ts`:
+
 - Queries: `projects`, `project(id)`
 - Mutations: `createProject`, `createCell`, `executeCell`, `markCellDependentsStale`
 - Custom scalar: `DateTime` for timestamp serialization
@@ -177,14 +183,17 @@ Schema defined in `apps/api/src/schema/index.ts`:
 ## Environment Variables
 
 ### API (`apps/api`)
+
 - `DATABASE_URL`: Postgres connection (default: postgres://sept:sept@localhost:5433/sept)
 - `PORT`: API port (default: 4000)
 - `COMPUTE_SERVICE_URL`: Compute service endpoint (default: http://localhost:8000)
 
 ### Web (`apps/web`)
+
 - `NEXT_PUBLIC_API_URL`: GraphQL endpoint (default: http://localhost:4000/graphql)
 
 ### Compute (`services/compute`)
+
 - Configured via Python env or defaults to port 8000
 
 ## Testing Notes

@@ -1,78 +1,89 @@
 "use client";
 
-import { useState, useEffect, use, useCallback } from "react";
+import { use, useCallback } from "react";
 import Link from "next/link";
-import { useQuery, useMutation } from "@apollo/client/react";
-import { GET_PROJECT } from "@/lib/graphql/queries";
-import { CREATE_CELL, UPDATE_CELL, DELETE_CELL, EXECUTE_CELL, MARK_CELL_DEPENDENTS_STALE, TOGGLE_AUTO_EXECUTE } from "@/lib/graphql/mutations";
+import { useQuery, useMutation, useSubscription } from "@apollo/client/react";
+import { GET_PROJECT, CELL_UPDATED_SUBSCRIPTION } from "@/lib/graphql/queries";
+import {
+  CREATE_CELL,
+  UPDATE_CELL,
+  DELETE_CELL,
+  EXECUTE_CELL,
+  MARK_CELL_DEPENDENTS_STALE,
+  TOGGLE_AUTO_EXECUTE,
+} from "@/lib/graphql/mutations";
 import { NotebookCell } from "@/components/NotebookCell";
+
+interface CellOutput {
+  type: string;
+  data: string;
+}
 
 interface Cell {
   id: string;
   type: "PYTHON" | "SQL" | "MARKDOWN";
   code: string;
-  outputs: any[] | null;
+  outputs: CellOutput[] | null;
   order: string;
   reads?: string[];
   writes?: string[];
   executionState?: string;
   lastExecutedAt?: string;
-  isRunning?: boolean;
+  queuedAt?: string;
+  executionDuration?: string;
 }
 
-export default function NotebookPage({ params }: { params: Promise<{ id: string }> }) {
+interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  autoExecute: boolean;
+  cells: Cell[];
+}
+
+export default function NotebookPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
-  const { data, loading, error, refetch } = useQuery(GET_PROJECT, {
+
+  // Initial data fetch
+  const { data, loading, error } = useQuery<{ project: Project }>(GET_PROJECT, {
     variables: { id },
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: "cache-and-network",
   });
 
-  const [createCell] = useMutation(CREATE_CELL);
+  // Subscribe to real-time cell updates
+  useSubscription(CELL_UPDATED_SUBSCRIPTION, {
+    variables: { projectId: id },
+    skip: !id,
+    shouldResubscribe: false,
+    // Apollo automatically merges updates for existing cells by ID
+  });
+
+  // Mutations
+  const [createCell] = useMutation(CREATE_CELL, {
+    refetchQueries: [{ query: GET_PROJECT, variables: { id } }],
+  });
   const [updateCell] = useMutation(UPDATE_CELL);
-  const [deleteCell] = useMutation(DELETE_CELL);
+  const [deleteCell] = useMutation(DELETE_CELL, {
+    refetchQueries: [{ query: GET_PROJECT, variables: { id } }],
+  });
   const [executeCell] = useMutation(EXECUTE_CELL);
   const [markDependentsStale] = useMutation(MARK_CELL_DEPENDENTS_STALE);
-  const [toggleAutoExecute] = useMutation(TOGGLE_AUTO_EXECUTE);
+  const [toggleAutoExecute] = useMutation(TOGGLE_AUTO_EXECUTE, {
+    refetchQueries: [{ query: GET_PROJECT, variables: { id } }],
+  });
 
-  const [cells, setCells] = useState<Cell[]>([]);
-  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
-  const [autoExecute, setAutoExecute] = useState<boolean>(true);
-  const [isPolling, setIsPolling] = useState(false);
+  // Get cells and autoExecute directly from GraphQL cache (no local state)
+  const cells: Cell[] = data?.project?.cells || [];
+  const autoExecute = data?.project?.autoExecute ?? true;
 
-  // Load cells from GraphQL data only on initial load
-  useEffect(() => {
-    if (data?.project?.cells && !hasLoadedInitialData) {
-      setCells(data.project.cells.map((cell: any) => ({
-        ...cell,
-        isRunning: false,
-      })));
-      setAutoExecute(data.project.autoExecute ?? true);
-      setHasLoadedInitialData(true);
-    }
-  }, [data, hasLoadedInitialData]);
-
-  // Sync cells from GraphQL updates without resetting local state
-  useEffect(() => {
-    if (data?.project?.cells && hasLoadedInitialData && !isPolling) {
-      setCells((prevCells) => {
-        const newCells = data.project.cells.map((cell: any) => {
-          const prevCell = prevCells.find((c) => c.id === cell.id);
-          // Preserve isRunning state from local state
-          return {
-            ...cell,
-            isRunning: prevCell?.isRunning || false,
-          };
-        });
-        return newCells;
-      });
-      setAutoExecute(data.project.autoExecute ?? true);
-    }
-  }, [data, hasLoadedInitialData, isPolling]);
-
-  const handleAddCell = async () => {
+  const handleAddCell = useCallback(async () => {
     try {
       const order = (cells.length + 1).toString();
-      const result = await createCell({
+      await createCell({
         variables: {
           projectId: id,
           input: {
@@ -82,153 +93,74 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
           },
         },
       });
-
-      if (result.data?.createCell) {
-        // Add the new cell to local state instead of refetching
-        setCells((prevCells) => [...prevCells, {
-          ...result.data.createCell,
-          isRunning: false,
-          outputs: null,
-        }]);
-      }
+      // Refetch will happen automatically via refetchQueries
     } catch (err) {
       console.error("Error creating cell:", err);
     }
-  };
+  }, [cells.length, id, createCell]);
 
-  const handleUpdateCellCode = useCallback(async (id: string, code: string) => {
-    // Update locally immediately for responsiveness
-    setCells((prevCells) => prevCells.map((cell) => (cell.id === id ? { ...cell, code } : cell)));
+  const handleUpdateCellCode = useCallback(
+    async (cellId: string, code: string) => {
+      try {
+        await updateCell({
+          variables: {
+            id: cellId,
+            input: { code },
+          },
+        });
 
-    // Debounce the API call (you might want to add proper debouncing)
-    try {
-      await updateCell({
-        variables: {
-          id,
-          input: { code },
-        },
-      });
+        // Mark dependent cells as stale when code changes
+        await markDependentsStale({
+          variables: { cellId },
+        });
 
-      // Mark dependent cells as stale when code changes
-      const result = await markDependentsStale({
-        variables: { cellId: id },
-      });
-
-      if (result.data?.markCellDependentsStale.staleCellIds.length > 0) {
-        // Update local state to mark cells as stale
-        const staleCellIds = result.data.markCellDependentsStale.staleCellIds;
-        setCells((prevCells) =>
-          prevCells.map((cell) =>
-            staleCellIds.includes(cell.id) ? { ...cell, executionState: 'stale' } : cell
-          )
-        );
+        // No manual state updates - subscription will handle it
+      } catch (err) {
+        console.error("Error updating cell:", err);
       }
-    } catch (err) {
-      console.error("Error updating cell:", err);
-    }
-  }, [updateCell, markDependentsStale]);
+    },
+    [updateCell, markDependentsStale],
+  );
 
-  const handleDeleteCell = useCallback(async (id: string) => {
-    try {
-      await deleteCell({
-        variables: { id },
-      });
-      // Remove from local state instead of refetching
-      setCells((prevCells) => prevCells.filter((c) => c.id !== id));
-    } catch (err) {
-      console.error("Error deleting cell:", err);
-    }
-  }, [deleteCell]);
+  const handleDeleteCell = useCallback(
+    async (cellId: string) => {
+      try {
+        await deleteCell({
+          variables: { id: cellId },
+        });
+        // Refetch will happen automatically via refetchQueries
+      } catch (err) {
+        console.error("Error deleting cell:", err);
+      }
+    },
+    [deleteCell],
+  );
 
   const handleToggleAutoExecute = useCallback(async () => {
     try {
-      const result = await toggleAutoExecute({
+      await toggleAutoExecute({
         variables: { projectId: id },
       });
-      if (result.data?.toggleAutoExecute) {
-        setAutoExecute(result.data.toggleAutoExecute.autoExecute);
-      }
+      // Refetch will happen automatically via refetchQueries
     } catch (err) {
       console.error("Error toggling auto-execute:", err);
     }
   }, [id, toggleAutoExecute]);
 
-  const handleRunCell = useCallback(async (id: string) => {
-    // Set running state
-    setCells((prevCells) => prevCells.map((c) => (c.id === id ? { ...c, isRunning: true, outputs: null, executionState: 'running' } : c)));
-
-    try {
-      const result = await executeCell({
-        variables: { id },
-      });
-
-      if (result.data?.executeCell) {
-        // Update cell with outputs and execution state
-        setCells((prevCells) =>
-          prevCells.map((c) =>
-            c.id === id
-              ? {
-                  ...c,
-                  outputs: result.data.executeCell.outputs,
-                  isRunning: false,
-                  executionState: result.data.executeCell.success ? 'success' : 'error'
-                }
-              : c
-          )
-        );
-
-        // If auto-execute is enabled and execution succeeded, poll for updates
-        if (result.data.executeCell.success && autoExecute) {
-          setIsPolling(true);
-
-          // Poll for updates every 200ms for up to 3 seconds
-          let pollCount = 0;
-          const maxPolls = 15; // 3 seconds / 200ms
-
-          const pollInterval = setInterval(async () => {
-            pollCount++;
-
-            try {
-              const { data: pollData } = await refetch();
-
-              if (pollData?.project?.cells) {
-                setCells((prevCells) => {
-                  return pollData.project.cells.map((cell: any) => {
-                    const prevCell = prevCells.find((c: Cell) => c.id === cell.id);
-                    return {
-                      ...cell,
-                      isRunning: prevCell?.isRunning || false,
-                    };
-                  });
-                });
-
-                // Check if all cells are done (not running)
-                const allDone = pollData.project.cells.every(
-                  (cell: any) => cell.executionState !== 'running'
-                );
-
-                if (allDone || pollCount >= maxPolls) {
-                  clearInterval(pollInterval);
-                  setIsPolling(false);
-                }
-              }
-            } catch (err) {
-              console.error("Error polling for updates:", err);
-              clearInterval(pollInterval);
-              setIsPolling(false);
-            }
-          }, 200);
-        }
+  const handleRunCell = useCallback(
+    async (cellId: string) => {
+      try {
+        // Just call executeCell - it will enqueue the cell
+        // Subscription will update UI with queued → running → success/error
+        await executeCell({
+          variables: { id: cellId },
+        });
+      } catch (err) {
+        console.error("Error executing cell:", err);
       }
-    } catch (err) {
-      console.error("Error executing cell:", err);
-      setCells((prevCells) =>
-        prevCells.map((c) =>
-          c.id === id ? { ...c, outputs: [{ type: "error", data: String(err) }], isRunning: false, executionState: 'error' } : c
-        )
-      );
-    }
-  }, [executeCell, autoExecute, refetch]);
+    },
+    [executeCell],
+  );
 
   if (loading) {
     return (
@@ -241,7 +173,9 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
   if (error || !data?.project) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-red-600">Error loading project: {error?.message || "Not found"}</p>
+        <p className="text-red-600">
+          Error loading project: {error?.message || "Not found"}
+        </p>
       </div>
     );
   }
@@ -256,7 +190,9 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
             <Link href="/" className="text-blue-600 hover:text-blue-700">
               ← Back
             </Link>
-            <h1 className="text-xl font-semibold text-gray-900">{project.name}</h1>
+            <h1 className="text-xl font-semibold text-gray-900">
+              {project.name}
+            </h1>
           </div>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -266,9 +202,7 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
                 onChange={handleToggleAutoExecute}
                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
               />
-              <span className="text-sm text-gray-700">
-                Reactive Mode
-              </span>
+              <span className="text-sm text-gray-700">Reactive Mode</span>
             </label>
           </div>
         </div>

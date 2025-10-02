@@ -1,15 +1,15 @@
-import { db } from '../models/db.js';
-import { cells } from '../models/schema.js';
-import { eq } from 'drizzle-orm';
+import { db } from "../models/db.js";
+import { cells } from "../models/schema.js";
+import { eq } from "drizzle-orm";
 
 interface CreateCellInput {
-  type: 'python' | 'sql' | 'markdown' | 'chart';
+  type: "python" | "sql" | "markdown" | "chart";
   code?: string;
   order: string;
 }
 
 interface UpdateCellInput {
-  type?: 'python' | 'sql' | 'markdown' | 'chart';
+  type?: "python" | "sql" | "markdown" | "chart";
   code?: string;
   order?: string;
   outputs?: any;
@@ -17,6 +17,8 @@ interface UpdateCellInput {
   writes?: string[];
   executionState?: string;
   lastExecutedAt?: Date;
+  queuedAt?: Date | null;
+  executionDuration?: string;
 }
 
 export const cellService = {
@@ -26,7 +28,7 @@ export const cellService = {
       .values({
         projectId,
         type: input.type,
-        code: input.code || '',
+        code: input.code || "",
         order: input.order,
         outputs: null,
       })

@@ -7,8 +7,17 @@ import { CREATE_PROJECT } from "@/lib/graphql/mutations";
 import { formatDate } from "@/lib/utils/date";
 import { useState } from "react";
 
+interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  updatedAt: string;
+}
+
 export default function Home() {
-  const { data, loading, error, refetch } = useQuery(GET_PROJECTS);
+  const { data, loading, error, refetch } = useQuery<{ projects: Project[] }>(
+    GET_PROJECTS,
+  );
   const [createProject] = useMutation(CREATE_PROJECT);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -81,18 +90,23 @@ export default function Home() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {projects.map((project: any) => (
+            {projects.map((project) => (
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
                 className="block bg-white p-6 rounded-lg border border-gray-200 hover:border-blue-500 transition-colors"
               >
-                <h3 className="text-lg font-medium text-gray-900">{project.name}</h3>
+                <h3 className="text-lg font-medium text-gray-900">
+                  {project.name}
+                </h3>
                 <p className="text-sm text-gray-500 mt-1">
                   {project.description || "No description"}
                 </p>
                 <p className="text-xs text-gray-400 mt-2">
-                  Updated {project.updatedAt ? formatDate(project.updatedAt) : 'Recently'}
+                  Updated{" "}
+                  {project.updatedAt
+                    ? formatDate(project.updatedAt)
+                    : "Recently"}
                 </p>
               </Link>
             ))}

@@ -1,4 +1,4 @@
-import gql from 'graphql-tag';
+import gql from "graphql-tag";
 
 export const typeDefs = gql`
   type Query {
@@ -19,6 +19,10 @@ export const typeDefs = gql`
 
     executeCell(id: ID!): CellExecutionResult!
     markCellDependentsStale(cellId: ID!): StaleResult!
+  }
+
+  type Subscription {
+    cellUpdated(projectId: ID!): Cell
   }
 
   type StaleResult {
@@ -49,6 +53,8 @@ export const typeDefs = gql`
     writes: [String!]
     executionState: String
     lastExecutedAt: DateTime
+    queuedAt: DateTime
+    executionDuration: String
     createdAt: String!
     updatedAt: String!
   }
@@ -69,6 +75,8 @@ export const typeDefs = gql`
     success: Boolean!
     outputs: [CellOutput!]!
     error: String
+    cellId: ID!
+    executionState: String!
   }
 
   input CreateProjectInput {

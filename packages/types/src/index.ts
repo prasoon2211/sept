@@ -1,8 +1,8 @@
 // Shared types across frontend and backend
 
-export type UserRole = 'admin' | 'editor' | 'viewer';
+export type UserRole = "admin" | "editor" | "viewer";
 
-export type CellType = 'python' | 'sql' | 'markdown' | 'chart';
+export type CellType = "python" | "sql" | "markdown" | "chart";
 
 export interface User {
   id: string;
@@ -51,7 +51,7 @@ export interface Cell {
 }
 
 export interface CellOutput {
-  type: 'text' | 'table' | 'image' | 'error';
+  type: "text" | "table" | "image" | "error";
   data: any;
 }
 
@@ -77,7 +77,7 @@ export interface DataConnection {
   id: string;
   workspaceId: string;
   name: string;
-  type: 'snowflake' | 'bigquery' | 'redshift' | 'postgres' | 'duckdb';
+  type: "snowflake" | "bigquery" | "redshift" | "postgres" | "duckdb";
   config: Record<string, any>;
   createdBy: string;
   createdAt: Date;
@@ -87,7 +87,7 @@ export interface DataConnection {
 // Execution types
 export interface ExecuteCodeRequest {
   code: string;
-  language: 'python' | 'sql';
+  language: "python" | "sql";
   sessionId?: string;
   connectionId?: string;
 }

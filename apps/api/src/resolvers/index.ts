@@ -1,13 +1,15 @@
-import { GraphQLScalarType, Kind } from 'graphql';
-import { projectService } from '../services/projects.js';
-import { cellService } from '../services/cells.js';
-import { dagService } from '../services/dag.js';
-import { env } from '../env.js';
+import { GraphQLScalarType, Kind } from "graphql";
+import { projectService } from "../services/projects.js";
+import { cellService } from "../services/cells.js";
+import { dagService } from "../services/dag.js";
+import { executionQueueService } from "../services/executionQueue.js";
+import { pubsub, CELL_UPDATED, publishCellUpdate } from "../services/pubsub.js";
+import { env } from "../env.js";
 
 // DateTime scalar for proper date serialization
 const dateTimeScalar = new GraphQLScalarType({
-  name: 'DateTime',
-  description: 'DateTime custom scalar type',
+  name: "DateTime",
+  description: "DateTime custom scalar type",
   serialize(value: any) {
     if (value instanceof Date) {
       return value.toISOString();
@@ -29,7 +31,7 @@ export const resolvers = {
   DateTime: dateTimeScalar,
 
   Query: {
-    hello: () => 'Hello from Sept API!',
+    hello: () => "Hello from Sept API!",
     projects: async () => {
       return await projectService.getAll();
     },
@@ -39,10 +41,19 @@ export const resolvers = {
   },
 
   Mutation: {
-    createProject: async (_: any, { input }: { input: { name: string; description?: string } }) => {
+    createProject: async (
+      _: any,
+      { input }: { input: { name: string; description?: string } },
+    ) => {
       return await projectService.create(input);
     },
-    updateProject: async (_: any, { id, input }: { id: string; input: { name?: string; description?: string } }) => {
+    updateProject: async (
+      _: any,
+      {
+        id,
+        input,
+      }: { id: string; input: { name?: string; description?: string } },
+    ) => {
       return await projectService.update(id, input);
     },
     deleteProject: async (_: any, { id }: { id: string }) => {
@@ -51,14 +62,17 @@ export const resolvers = {
     toggleAutoExecute: async (_: any, { projectId }: { projectId: string }) => {
       const project = await projectService.getById(projectId);
       if (!project) {
-        throw new Error('Project not found');
+        throw new Error("Project not found");
       }
       return await projectService.update(projectId, {
         autoExecute: !project.autoExecute,
       });
     },
 
-    createCell: async (_: any, { projectId, input }: { projectId: string; input: any }) => {
+    createCell: async (
+      _: any,
+      { projectId, input }: { projectId: string; input: any },
+    ) => {
       return await cellService.create(projectId, input);
     },
     updateCell: async (_: any, { id, input }: { id: string; input: any }) => {
@@ -69,80 +83,55 @@ export const resolvers = {
     },
 
     executeCell: async (_: any, { id }: { id: string }) => {
+      // Just enqueue the cell - execution happens in background queue
+      await executionQueueService.enqueue(id);
+
+      // Return immediately - cell is now queued
       const cell = await cellService.getById(id);
-      if (!cell) {
-        throw new Error('Cell not found');
-      }
-
-      // Mark cell as running
-      await cellService.update(id, {
-        executionState: 'running',
-      });
-
-      // Call compute service with project ID as session ID for kernel persistence
-      const response = await fetch(`${env.COMPUTE_SERVICE_URL}/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: cell.code,
-          language: cell.type,
-          session_id: cell.projectId, // Use project ID as session for persistent kernel
-        }),
-      });
-
-      const result = await response.json();
-
-      // Update cell with outputs, dependencies, and execution state
-      await cellService.update(id, {
-        outputs: result.outputs,
-        reads: result.dependencies?.reads || [],
-        writes: result.dependencies?.writes || [],
-        executionState: result.success ? 'success' : 'error',
-        lastExecutedAt: new Date(),
-      });
-
-      // Auto-execute dependent cells if enabled and execution succeeded
-      if (result.success) {
-        const project = await projectService.getById(cell.projectId);
-        if (project?.autoExecute) {
-          // Get immediate dependents
-          const graph = await dagService.buildDependencyGraph(cell.projectId);
-          const dependents = graph.get(id) || [];
-
-          // Execute each dependent cell asynchronously (don't await to avoid blocking)
-          // They will execute in parallel
-          for (const dependentId of dependents) {
-            // Fire and forget - execute in background
-            resolvers.Mutation.executeCell(_, { id: dependentId }).catch((err) => {
-              console.error(`Auto-execution failed for cell ${dependentId}:`, err);
-            });
-          }
-        }
-      }
-
       return {
-        success: result.success,
-        outputs: result.outputs,
-        error: result.error,
+        success: true,
+        outputs: [],
+        error: null,
+        cellId: id,
+        executionState: cell?.executionState || "queued",
       };
     },
 
     markCellDependentsStale: async (_: any, { cellId }: { cellId: string }) => {
       const cell = await cellService.getById(cellId);
       if (!cell) {
-        throw new Error('Cell not found');
+        throw new Error("Cell not found");
       }
 
-      const dependents = await dagService.getAllDependents(cellId, cell.projectId);
+      const dependents = await dagService.getAllDependents(
+        cellId,
+        cell.projectId,
+      );
 
       if (dependents.length > 0) {
         await dagService.markDependentsAsStale(cellId, cell.projectId);
+
+        // Publish updates for each stale cell so UI updates in real-time
+        for (const dependentId of dependents) {
+          const staleCell = await cellService.getById(dependentId);
+          if (staleCell) {
+            publishCellUpdate(cell.projectId, staleCell);
+          }
+        }
       }
 
       return {
         staleCellIds: dependents,
         count: dependents.length,
       };
+    },
+  },
+
+  Subscription: {
+    cellUpdated: {
+      subscribe: (_: any, { projectId }: { projectId: string }) => {
+        return pubsub.asyncIterator(`${CELL_UPDATED}_${projectId}`);
+      },
     },
   },
 

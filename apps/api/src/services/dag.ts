@@ -1,6 +1,6 @@
-import { db } from '../models/db.js';
-import { cells } from '../models/schema.js';
-import { eq } from 'drizzle-orm';
+import { db } from "../models/db.js";
+import { cells } from "../models/schema.js";
+import { eq } from "drizzle-orm";
 
 interface CellDependency {
   id: string;
@@ -21,7 +21,9 @@ export const dagService = {
    * If Cell 2 writes 'x' and Cell 4 writes 'x', then Cell 5 reading 'x'
    * depends ONLY on Cell 4 (the most recent write).
    */
-  async buildDependencyGraph(projectId: string): Promise<Map<string, string[]>> {
+  async buildDependencyGraph(
+    projectId: string,
+  ): Promise<Map<string, string[]>> {
     const projectCells = await db
       .select({
         id: cells.id,
@@ -36,7 +38,7 @@ export const dagService = {
     const sortedCells = projectCells
       .map((cell) => ({
         id: cell.id,
-        order: parseInt(cell.order || '0', 10),
+        order: parseInt(cell.order || "0", 10),
         reads: (cell.reads as string[]) || [],
         writes: (cell.writes as string[]) || [],
       }))
@@ -83,10 +85,7 @@ export const dagService = {
   /**
    * Get all downstream dependents of a cell (transitive closure)
    */
-  async getAllDependents(
-    cellId: string,
-    projectId: string
-  ): Promise<string[]> {
+  async getAllDependents(cellId: string, projectId: string): Promise<string[]> {
     const graph = await this.buildDependencyGraph(projectId);
     const visited = new Set<string>();
     const result: string[] = [];
@@ -153,7 +152,10 @@ export const dagService = {
   /**
    * Mark all dependent cells as stale when a cell's code changes
    */
-  async markDependentsAsStale(cellId: string, projectId: string): Promise<number> {
+  async markDependentsAsStale(
+    cellId: string,
+    projectId: string,
+  ): Promise<number> {
     const dependents = await this.getAllDependents(cellId, projectId);
 
     if (dependents.length === 0) {
@@ -164,8 +166,8 @@ export const dagService = {
     const updates = dependents.map((depId) =>
       db
         .update(cells)
-        .set({ executionState: 'stale' })
-        .where(eq(cells.id, depId))
+        .set({ executionState: "stale" })
+        .where(eq(cells.id, depId)),
     );
 
     await Promise.all(updates);
@@ -219,7 +221,9 @@ export const dagService = {
 
     // If result doesn't include all nodes, there's a cycle
     if (result.length !== graph.size) {
-      throw new Error('Cannot compute execution order: circular dependency detected');
+      throw new Error(
+        "Cannot compute execution order: circular dependency detected",
+      );
     }
 
     return result;

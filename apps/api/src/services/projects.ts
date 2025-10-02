@@ -1,31 +1,37 @@
-import { db } from '../models/db.js';
-import { projects, cells, users, workspaces } from '../models/schema.js';
-import { eq } from 'drizzle-orm';
+import { db } from "../models/db.js";
+import { projects, cells, users, workspaces } from "../models/schema.js";
+import { eq } from "drizzle-orm";
 
 // Ensure default workspace and user exist
 async function ensureDefaultWorkspace() {
-  const defaultUserId = '00000000-0000-0000-0000-000000000000';
-  const defaultWorkspaceId = '00000000-0000-0000-0000-000000000000';
+  const defaultUserId = "00000000-0000-0000-0000-000000000000";
+  const defaultWorkspaceId = "00000000-0000-0000-0000-000000000000";
 
   // Check if default user exists
-  const existingUser = await db.select().from(users).where(eq(users.id, defaultUserId));
+  const existingUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, defaultUserId));
 
   if (existingUser.length === 0) {
     await db.insert(users).values({
       id: defaultUserId,
-      email: 'default@sept.dev',
-      name: 'Default User',
+      email: "default@sept.dev",
+      name: "Default User",
     });
   }
 
   // Check if default workspace exists
-  const existingWorkspace = await db.select().from(workspaces).where(eq(workspaces.id, defaultWorkspaceId));
+  const existingWorkspace = await db
+    .select()
+    .from(workspaces)
+    .where(eq(workspaces.id, defaultWorkspaceId));
 
   if (existingWorkspace.length === 0) {
     await db.insert(workspaces).values({
       id: defaultWorkspaceId,
-      name: 'Default Workspace',
-      slug: 'default',
+      name: "Default Workspace",
+      slug: "default",
     });
   }
 
@@ -59,7 +65,10 @@ export const projectService = {
     return result[0];
   },
 
-  async update(id: string, input: { name?: string; description?: string }) {
+  async update(
+    id: string,
+    input: { name?: string; description?: string; autoExecute?: boolean },
+  ) {
     const result = await db
       .update(projects)
       .set({

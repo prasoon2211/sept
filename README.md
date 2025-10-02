@@ -40,12 +40,14 @@ sept/
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone <repository-url>
    cd sept
    ```
 
 2. **Install dependencies**
+
    ```bash
    # Install Bun dependencies
    bun install
@@ -64,6 +66,7 @@ sept/
    ```
 
 That's it! The `bun run dev` command will:
+
 - Start PostgreSQL (port 5433) and Redis (port 6380) in Docker
 - Setup database schema automatically
 - Start the GraphQL API server (port 4000)
@@ -71,6 +74,7 @@ That's it! The `bun run dev` command will:
 - Start the Python compute service (port 8000) if Python venv is set up
 
 **Optional: Setup Python compute service**
+
 ```bash
 cd services/compute
 python -m venv venv
@@ -82,6 +86,7 @@ cd ../..
 ### Development
 
 Services will be available at:
+
 - Frontend: http://localhost:3000
 - GraphQL API: http://localhost:4000/graphql
 - Compute API: http://localhost:8000
@@ -89,6 +94,7 @@ Services will be available at:
 - Redis: localhost:6380
 
 **Other useful commands:**
+
 ```bash
 bun run docker:up      # Start only Docker services (Postgres & Redis)
 bun run docker:down    # Stop Docker services
