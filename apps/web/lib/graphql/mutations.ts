@@ -61,3 +61,12 @@ export const MARK_CELL_DEPENDENTS_STALE = gql`
     }
   }
 `;
+
+export const TOGGLE_AUTO_EXECUTE = gql`
+  mutation ToggleAutoExecute($projectId: ID!) {
+    toggleAutoExecute(projectId: $projectId) {
+      id
+      autoExecute
+    }
+  }
+`;

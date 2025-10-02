@@ -4,7 +4,7 @@ import { useState, useEffect, use, useCallback } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "@apollo/client/react";
 import { GET_PROJECT } from "@/lib/graphql/queries";
-import { CREATE_CELL, UPDATE_CELL, DELETE_CELL, EXECUTE_CELL, MARK_CELL_DEPENDENTS_STALE } from "@/lib/graphql/mutations";
+import { CREATE_CELL, UPDATE_CELL, DELETE_CELL, EXECUTE_CELL, MARK_CELL_DEPENDENTS_STALE, TOGGLE_AUTO_EXECUTE } from "@/lib/graphql/mutations";
 import { NotebookCell } from "@/components/NotebookCell";
 
 interface Cell {
@@ -24,6 +24,7 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const { data, loading, error, refetch } = useQuery(GET_PROJECT, {
     variables: { id },
+    fetchPolicy: 'cache-and-network',
   });
 
   const [createCell] = useMutation(CREATE_CELL);
@@ -31,9 +32,12 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
   const [deleteCell] = useMutation(DELETE_CELL);
   const [executeCell] = useMutation(EXECUTE_CELL);
   const [markDependentsStale] = useMutation(MARK_CELL_DEPENDENTS_STALE);
+  const [toggleAutoExecute] = useMutation(TOGGLE_AUTO_EXECUTE);
 
   const [cells, setCells] = useState<Cell[]>([]);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+  const [autoExecute, setAutoExecute] = useState<boolean>(true);
+  const [isPolling, setIsPolling] = useState(false);
 
   // Load cells from GraphQL data only on initial load
   useEffect(() => {
@@ -42,9 +46,28 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
         ...cell,
         isRunning: false,
       })));
+      setAutoExecute(data.project.autoExecute ?? true);
       setHasLoadedInitialData(true);
     }
   }, [data, hasLoadedInitialData]);
+
+  // Sync cells from GraphQL updates without resetting local state
+  useEffect(() => {
+    if (data?.project?.cells && hasLoadedInitialData && !isPolling) {
+      setCells((prevCells) => {
+        const newCells = data.project.cells.map((cell: any) => {
+          const prevCell = prevCells.find((c) => c.id === cell.id);
+          // Preserve isRunning state from local state
+          return {
+            ...cell,
+            isRunning: prevCell?.isRunning || false,
+          };
+        });
+        return newCells;
+      });
+      setAutoExecute(data.project.autoExecute ?? true);
+    }
+  }, [data, hasLoadedInitialData, isPolling]);
 
   const handleAddCell = async () => {
     try {
@@ -117,6 +140,19 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
     }
   }, [deleteCell]);
 
+  const handleToggleAutoExecute = useCallback(async () => {
+    try {
+      const result = await toggleAutoExecute({
+        variables: { projectId: id },
+      });
+      if (result.data?.toggleAutoExecute) {
+        setAutoExecute(result.data.toggleAutoExecute.autoExecute);
+      }
+    } catch (err) {
+      console.error("Error toggling auto-execute:", err);
+    }
+  }, [id, toggleAutoExecute]);
+
   const handleRunCell = useCallback(async (id: string) => {
     // Set running state
     setCells((prevCells) => prevCells.map((c) => (c.id === id ? { ...c, isRunning: true, outputs: null, executionState: 'running' } : c)));
@@ -140,6 +176,49 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
               : c
           )
         );
+
+        // If auto-execute is enabled and execution succeeded, poll for updates
+        if (result.data.executeCell.success && autoExecute) {
+          setIsPolling(true);
+
+          // Poll for updates every 200ms for up to 3 seconds
+          let pollCount = 0;
+          const maxPolls = 15; // 3 seconds / 200ms
+
+          const pollInterval = setInterval(async () => {
+            pollCount++;
+
+            try {
+              const { data: pollData } = await refetch();
+
+              if (pollData?.project?.cells) {
+                setCells((prevCells) => {
+                  return pollData.project.cells.map((cell: any) => {
+                    const prevCell = prevCells.find((c: Cell) => c.id === cell.id);
+                    return {
+                      ...cell,
+                      isRunning: prevCell?.isRunning || false,
+                    };
+                  });
+                });
+
+                // Check if all cells are done (not running)
+                const allDone = pollData.project.cells.every(
+                  (cell: any) => cell.executionState !== 'running'
+                );
+
+                if (allDone || pollCount >= maxPolls) {
+                  clearInterval(pollInterval);
+                  setIsPolling(false);
+                }
+              }
+            } catch (err) {
+              console.error("Error polling for updates:", err);
+              clearInterval(pollInterval);
+              setIsPolling(false);
+            }
+          }, 200);
+        }
       }
     } catch (err) {
       console.error("Error executing cell:", err);
@@ -149,7 +228,7 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
         )
       );
     }
-  }, [executeCell]);
+  }, [executeCell, autoExecute, refetch]);
 
   if (loading) {
     return (
@@ -178,6 +257,19 @@ export default function NotebookPage({ params }: { params: Promise<{ id: string 
               ← Back
             </Link>
             <h1 className="text-xl font-semibold text-gray-900">{project.name}</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoExecute}
+                onChange={handleToggleAutoExecute}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">
+                Reactive Mode
+              </span>
+            </label>
           </div>
         </div>
       </header>

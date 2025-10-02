@@ -95,4 +95,14 @@ export const NotebookCell = memo(function NotebookCell({
       )}
     </div>
   );
+}, (prevProps, nextProps) => {
+  // Custom comparison to prevent unnecessary re-renders
+  return (
+    prevProps.cell.id === nextProps.cell.id &&
+    prevProps.cell.code === nextProps.cell.code &&
+    prevProps.cell.executionState === nextProps.cell.executionState &&
+    prevProps.cell.isRunning === nextProps.cell.isRunning &&
+    JSON.stringify(prevProps.cell.outputs) === JSON.stringify(nextProps.cell.outputs) &&
+    prevProps.index === nextProps.index
+  );
 });

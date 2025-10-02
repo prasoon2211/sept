@@ -11,6 +11,7 @@ export const typeDefs = gql`
     createProject(input: CreateProjectInput!): Project!
     updateProject(id: ID!, input: UpdateProjectInput!): Project!
     deleteProject(id: ID!): Boolean!
+    toggleAutoExecute(projectId: ID!): Project!
 
     createCell(projectId: ID!, input: CreateCellInput!): Cell!
     updateCell(id: ID!, input: UpdateCellInput!): Cell!
@@ -31,6 +32,7 @@ export const typeDefs = gql`
     id: ID!
     name: String!
     description: String
+    autoExecute: Boolean!
     cells: [Cell!]!
     createdAt: DateTime!
     updatedAt: DateTime!
@@ -77,6 +79,7 @@ export const typeDefs = gql`
   input UpdateProjectInput {
     name: String
     description: String
+    autoExecute: Boolean
   }
 
   input CreateCellInput {

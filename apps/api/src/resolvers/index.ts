@@ -48,6 +48,15 @@ export const resolvers = {
     deleteProject: async (_: any, { id }: { id: string }) => {
       return await projectService.delete(id);
     },
+    toggleAutoExecute: async (_: any, { projectId }: { projectId: string }) => {
+      const project = await projectService.getById(projectId);
+      if (!project) {
+        throw new Error('Project not found');
+      }
+      return await projectService.update(projectId, {
+        autoExecute: !project.autoExecute,
+      });
+    },
 
     createCell: async (_: any, { projectId, input }: { projectId: string; input: any }) => {
       return await cellService.create(projectId, input);
@@ -91,6 +100,25 @@ export const resolvers = {
         executionState: result.success ? 'success' : 'error',
         lastExecutedAt: new Date(),
       });
+
+      // Auto-execute dependent cells if enabled and execution succeeded
+      if (result.success) {
+        const project = await projectService.getById(cell.projectId);
+        if (project?.autoExecute) {
+          // Get immediate dependents
+          const graph = await dagService.buildDependencyGraph(cell.projectId);
+          const dependents = graph.get(id) || [];
+
+          // Execute each dependent cell asynchronously (don't await to avoid blocking)
+          // They will execute in parallel
+          for (const dependentId of dependents) {
+            // Fire and forget - execute in background
+            resolvers.Mutation.executeCell(_, { id: dependentId }).catch((err) => {
+              console.error(`Auto-execution failed for cell ${dependentId}:`, err);
+            });
+          }
+        }
+      }
 
       return {
         success: result.success,
